@@ -53,8 +53,4 @@ kubectl apply -f infra/k8s/
 - [ ] Add dashboards, alerts, CI/CD, monitoring
 - [ ] Optional cloud deploy to AWS/GCP
 
-## 🤝 Contributing
-
-Contributions are welcome. Please fork and submit PRs!
-
 ---
