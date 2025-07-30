@@ -15,9 +15,6 @@ This is a robust, industry-grade microservices-based banking platform built with
 | Persistence        | PostgreSQL, Redis                                                                 |
 | Monitoring         | Prometheus, Grafana                                                               |
 | CI/CD              | Jenkins, Docker, Kubernetes (K8s)                                                 |
-| Code Quality       | SonarQube                                                                         |
-| Optional           | Spring AI, OpenTelemetry                                                          |
-
 ## 📦 Modules
 
 - `authservice`: Authentication & JWT Token Service
