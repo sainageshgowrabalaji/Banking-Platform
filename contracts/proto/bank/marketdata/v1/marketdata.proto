@@ -1,0 +1,33 @@
+// Streaming prices from market-data-service to trading, positions and wealth.
+// Draft for phase 2. Nothing serves this yet.
+syntax = "proto3";
+
+package bank.marketdata.v1;
+
+option java_multiple_files = true;
+option java_package = "com.sainagesh.bank.marketdata.v1";
+
+import "google/protobuf/timestamp.proto";
+
+service MarketDataFeed {
+  // Sends the latest quote for each symbol, then every change.
+  rpc Subscribe(SubscribeRequest) returns (stream Quote);
+}
+
+message SubscribeRequest {
+  repeated string symbols = 1;
+}
+
+// Prices are integers in ten-thousandths of the quote currency, so 1.2345 USD is 12345.
+// Integers are exact and fast to compare, which is why exchanges send prices this way.
+message Quote {
+  string symbol = 1;
+  int64 bid_price = 2;
+  int64 bid_size = 3;
+  int64 ask_price = 4;
+  int64 ask_size = 5;
+  int64 last_price = 6;
+  int64 last_size = 7;
+  google.protobuf.Timestamp time = 8;
+  uint64 sequence = 9;
+}

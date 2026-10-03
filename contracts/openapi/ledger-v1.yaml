@@ -1,0 +1,299 @@
+openapi: 3.1.0
+info:
+  title: Ledger API
+  version: 1.0.0-draft
+  description: >-
+    Accounts and the double-entry journal. Draft contract for phase 1. The service does not serve
+    these endpoints yet.
+servers:
+  - url: http://localhost:8080/ledger
+    description: Through the local gateway
+tags:
+  - name: Accounts
+  - name: Journal
+security:
+  - bearerAuth: []
+paths:
+  /v1/accounts:
+    post:
+      operationId: openAccount
+      summary: Open an account
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OpenAccountRequest'
+      responses:
+        '201':
+          description: The account was opened
+          headers:
+            Location:
+              description: URL of the new account
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '401':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/accounts/{accountId}:
+    get:
+      operationId: getAccount
+      summary: Get one account
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: The account
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/accounts/{accountId}/balance:
+    get:
+      operationId: getBalance
+      summary: Get the balances of an account
+      description: The ledger balance counts posted entries. The available balance also subtracts holds.
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+      responses:
+        '200':
+          description: The balances
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Balance'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/accounts/{accountId}/entries:
+    get:
+      operationId: listEntries
+      summary: List the journal entries that touched an account, newest first
+      tags: [Journal]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Cursor'
+      responses:
+        '200':
+          description: One page of entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntryPage'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/journal-entries:
+    post:
+      operationId: postJournalEntry
+      summary: Post a balanced journal entry
+      description: Internal. Called by other services, never by a customer. Debits must equal credits.
+      tags: [Journal]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PostJournalEntryRequest'
+      responses:
+        '201':
+          description: The entry was posted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: The same key on a retry returns the first response again.
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{8,64}$'
+    AccountId:
+      name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    Limit:
+      name: limit
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    Cursor:
+      name: cursor
+      in: query
+      description: The `nextCursor` value of the previous page.
+      schema:
+        type: string
+  responses:
+    Problem:
+      description: An error in RFC 9457 problem details format
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^-?[0-9]+([.][0-9]+)?$'
+          examples: ['125.50']
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+          examples: [USD]
+    AccountType:
+      type: string
+      enum: [CHECKING, SAVINGS, INTERNAL]
+    AccountStatus:
+      type: string
+      enum: [PENDING, ACTIVE, FROZEN, CLOSED]
+    OpenAccountRequest:
+      type: object
+      required: [customerId, type, currency]
+      properties:
+        customerId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/AccountType'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+    Account:
+      type: object
+      required: [id, customerId, type, currency, status, openedAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        customerId:
+          type: string
+          format: uuid
+        type:
+          $ref: '#/components/schemas/AccountType'
+        currency:
+          type: string
+        status:
+          $ref: '#/components/schemas/AccountStatus'
+        openedAt:
+          type: string
+          format: date-time
+    Balance:
+      type: object
+      required: [accountId, ledger, available, asOf]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        ledger:
+          $ref: '#/components/schemas/Money'
+        available:
+          $ref: '#/components/schemas/Money'
+        asOf:
+          type: string
+          format: date-time
+    Posting:
+      type: object
+      required: [accountId, side, amount]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        side:
+          type: string
+          enum: [DEBIT, CREDIT]
+        amount:
+          $ref: '#/components/schemas/Money'
+    PostJournalEntryRequest:
+      type: object
+      required: [reference, postings]
+      properties:
+        reference:
+          type: string
+          description: The business reason, such as a payment id. One reference is posted at most once.
+        postings:
+          type: array
+          minItems: 2
+          items:
+            $ref: '#/components/schemas/Posting'
+    JournalEntry:
+      type: object
+      required: [id, reference, postedAt, postings]
+      properties:
+        id:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        postedAt:
+          type: string
+          format: date-time
+        postings:
+          type: array
+          items:
+            $ref: '#/components/schemas/Posting'
+    EntryPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/JournalEntry'
+        nextCursor:
+          type: string
+          description: Missing on the last page.
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+          examples: [INSUFFICIENT_FUNDS]
+        traceId:
+          type: string

@@ -1,0 +1,250 @@
+openapi: 3.1.0
+info:
+  title: Payments API
+  version: 1.0.0-draft
+  description: >-
+    Send, track and cancel payments. The fields map to ISO 20022 (pain.001 for the request, pacs.008
+    between banks, pacs.002 for status). Draft contract for phase 1. The service does not serve these
+    endpoints yet.
+servers:
+  - url: http://localhost:8080/payments
+    description: Through the local gateway
+tags:
+  - name: Payments
+security:
+  - bearerAuth: []
+paths:
+  /v1/payments:
+    post:
+      operationId: createPayment
+      summary: Send a payment
+      description: >-
+        Returns 202 because a payment is a saga. Funds are held, the payment is screened, sent on its
+        rail and then settled or released. Follow the status with GET or the payment events.
+      tags: [Payments]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreatePaymentRequest'
+      responses:
+        '202':
+          description: The payment was accepted for processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+    get:
+      operationId: listPayments
+      summary: List payments of an account, newest first
+      tags: [Payments]
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          schema:
+            $ref: '#/components/schemas/PaymentStatus'
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+        - name: cursor
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: One page of payments
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentPage'
+  /v1/payments/{paymentId}:
+    get:
+      operationId: getPayment
+      summary: Get one payment
+      tags: [Payments]
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: The payment
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/payments/{paymentId}/cancel:
+    post:
+      operationId: cancelPayment
+      summary: Cancel a payment that has not been sent on its rail yet
+      tags: [Payments]
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The payment was cancelled and the hold was released
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{8,64}$'
+    PaymentId:
+      name: paymentId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Problem:
+      description: An error in RFC 9457 problem details format
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+          pattern: '^[0-9]+([.][0-9]+)?$'
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+    Rail:
+      type: string
+      description: BOOK moves money inside the bank. ACH settles in batches. INSTANT settles in seconds.
+      enum: [BOOK, ACH, INSTANT]
+    PaymentStatus:
+      type: string
+      description: >-
+        ISO 20022 status codes. RCVD received, ACCP accepted after checks, ACSP in process, ACSC settled,
+        RJCT rejected, CANC cancelled.
+      enum: [RCVD, ACCP, ACSP, ACSC, RJCT, CANC]
+    Party:
+      type: object
+      required: [name, accountNumber]
+      properties:
+        name:
+          type: string
+          maxLength: 140
+        accountNumber:
+          type: string
+        routingNumber:
+          type: string
+          description: Needed for ACH and INSTANT.
+    CreatePaymentRequest:
+      type: object
+      required: [debtorAccountId, creditor, amount, rail]
+      properties:
+        debtorAccountId:
+          type: string
+          format: uuid
+        creditor:
+          $ref: '#/components/schemas/Party'
+        amount:
+          $ref: '#/components/schemas/Money'
+        rail:
+          $ref: '#/components/schemas/Rail'
+        endToEndId:
+          type: string
+          maxLength: 35
+          description: The sender's own reference. It travels with the payment to the receiver.
+        remittanceInformation:
+          type: string
+          maxLength: 140
+    Payment:
+      type: object
+      required: [id, debtorAccountId, creditor, amount, rail, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        debtorAccountId:
+          type: string
+          format: uuid
+        creditor:
+          $ref: '#/components/schemas/Party'
+        amount:
+          $ref: '#/components/schemas/Money'
+        rail:
+          $ref: '#/components/schemas/Rail'
+        status:
+          $ref: '#/components/schemas/PaymentStatus'
+        reasonCode:
+          type: string
+          description: ISO 20022 reason when the status is RJCT, such as AM04 for insufficient funds.
+        endToEndId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        settledAt:
+          type: string
+          format: date-time
+    PaymentPage:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/Payment'
+        nextCursor:
+          type: string
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string

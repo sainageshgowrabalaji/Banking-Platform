@@ -1,0 +1,194 @@
+asyncapi: 3.0.0
+info:
+  title: Platform events
+  version: 1.0.0-draft
+  description: >-
+    The Kafka topics the services share. Every message is wrapped in the same envelope, and the Kafka
+    key is the envelope subject, so all events for one account, payment or order stay in order. Draft
+    for phases 1 and 2. Nothing publishes these yet.
+defaultContentType: application/json
+servers:
+  local:
+    host: localhost:9092
+    protocol: kafka
+    description: The broker from infra/docker-compose.yml
+channels:
+  ledger:
+    address: bank.ledger.v1
+    messages:
+      journalEntryPosted:
+        $ref: '#/components/messages/JournalEntryPosted'
+  payments:
+    address: bank.payments.v1
+    messages:
+      paymentAccepted:
+        $ref: '#/components/messages/PaymentAccepted'
+      paymentSettled:
+        $ref: '#/components/messages/PaymentSettled'
+      paymentRejected:
+        $ref: '#/components/messages/PaymentRejected'
+  executions:
+    address: markets.executions.v1
+    messages:
+      orderFilled:
+        $ref: '#/components/messages/OrderFilled'
+operations:
+  publishLedgerEvents:
+    action: send
+    channel:
+      $ref: '#/channels/ledger'
+    summary: The ledger service publishes through its outbox table.
+  publishPaymentEvents:
+    action: send
+    channel:
+      $ref: '#/channels/payments'
+    summary: The payments service publishes each step of the payment saga.
+  notifyOnPaymentEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/payments'
+    summary: The notification service tells the customer. It skips event ids it has already handled.
+  publishExecutions:
+    action: send
+    channel:
+      $ref: '#/channels/executions'
+    summary: The trading service publishes every fill. Positions and post-trade consume them.
+components:
+  messages:
+    JournalEntryPosted:
+      name: bank.ledger.entry-posted
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [entryId, reference, postings]
+                properties:
+                  entryId:
+                    type: string
+                    format: uuid
+                  reference:
+                    type: string
+                  postings:
+                    type: array
+                    items:
+                      type: object
+                      required: [accountId, side, amount]
+                      properties:
+                        accountId:
+                          type: string
+                        side:
+                          type: string
+                          enum: [DEBIT, CREDIT]
+                        amount:
+                          $ref: '#/components/schemas/Money'
+    PaymentAccepted:
+      name: bank.payments.accepted
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                $ref: '#/components/schemas/PaymentData'
+    PaymentSettled:
+      name: bank.payments.settled
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                $ref: '#/components/schemas/PaymentData'
+    PaymentRejected:
+      name: bank.payments.rejected
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                $ref: '#/components/schemas/PaymentData'
+    OrderFilled:
+      name: markets.executions.filled
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [executionId, orderId, accountId, symbol, side, quantity, price]
+                properties:
+                  executionId:
+                    type: string
+                    format: uuid
+                  orderId:
+                    type: string
+                    format: uuid
+                  accountId:
+                    type: string
+                    format: uuid
+                  symbol:
+                    type: string
+                  side:
+                    type: string
+                    enum: [BUY, SELL]
+                  quantity:
+                    type: integer
+                    format: int64
+                  price:
+                    type: string
+  schemas:
+    Envelope:
+      type: object
+      description: The same fields as EventEnvelope in libs/common-events.
+      required: [id, type, source, subject, time, data]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Consumers store this id to skip duplicates.
+        type:
+          type: string
+        source:
+          type: string
+        subject:
+          type: string
+          description: The business key. It is also the Kafka key.
+        time:
+          type: string
+          format: date-time
+        traceparent:
+          type: string
+          description: W3C trace context, so one trace follows a payment across services.
+    Money:
+      type: object
+      required: [amount, currency]
+      properties:
+        amount:
+          type: string
+        currency:
+          type: string
+    PaymentData:
+      type: object
+      required: [paymentId, debtorAccountId, amount, rail, status]
+      properties:
+        paymentId:
+          type: string
+          format: uuid
+        debtorAccountId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        rail:
+          type: string
+          enum: [BOOK, ACH, INSTANT]
+        status:
+          type: string
+          enum: [RCVD, ACCP, ACSP, ACSC, RJCT, CANC]
+        reasonCode:
+          type: string

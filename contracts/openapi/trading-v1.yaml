@@ -1,0 +1,255 @@
+openapi: 3.1.0
+info:
+  title: Trading API
+  version: 1.0.0-draft
+  description: >-
+    Orders and the order book. The same order model is also reachable over FIX 4.4. Draft contract for
+    phase 2. The service does not serve these endpoints yet.
+servers:
+  - url: http://localhost:8080/trading
+    description: Through the local gateway
+tags:
+  - name: Orders
+  - name: Book
+security:
+  - bearerAuth: []
+paths:
+  /v1/orders:
+    post:
+      operationId: placeOrder
+      summary: Place an order
+      description: The order passes pre-trade risk checks, then goes to the matching engine.
+      tags: [Orders]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceOrderRequest'
+      responses:
+        '201':
+          description: The order was accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/orders/{orderId}:
+    get:
+      operationId: getOrder
+      summary: Get one order with its fills
+      tags: [Orders]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: The order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          $ref: '#/components/responses/Problem'
+    delete:
+      operationId: cancelOrder
+      summary: Cancel the open quantity of an order
+      tags: [Orders]
+      parameters:
+        - $ref: '#/components/parameters/OrderId'
+      responses:
+        '200':
+          description: The order after the cancel
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/instruments/{symbol}/book:
+    get:
+      operationId: getBook
+      summary: Get the order book of an instrument
+      tags: [Book]
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: depth
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+            default: 10
+      responses:
+        '200':
+          description: Bids and asks, best price first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        pattern: '^[A-Za-z0-9._:-]{8,64}$'
+    OrderId:
+      name: orderId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  responses:
+    Problem:
+      description: An error in RFC 9457 problem details format
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Side:
+      type: string
+      enum: [BUY, SELL]
+    OrderType:
+      type: string
+      enum: [LIMIT, MARKET]
+    TimeInForce:
+      type: string
+      description: DAY rests until the close. IOC fills what it can now and cancels the rest. FOK fills fully or not at all.
+      enum: [DAY, IOC, FOK]
+    OrderStatus:
+      type: string
+      description: Follows the FIX OrdStatus values.
+      enum: [NEW, PARTIALLY_FILLED, FILLED, CANCELED, REJECTED]
+    PlaceOrderRequest:
+      type: object
+      required: [accountId, symbol, side, type, quantity]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+          examples: [AAPL]
+        side:
+          $ref: '#/components/schemas/Side'
+        type:
+          $ref: '#/components/schemas/OrderType'
+        quantity:
+          type: integer
+          format: int64
+          minimum: 1
+        limitPrice:
+          type: string
+          pattern: '^[0-9]+([.][0-9]+)?$'
+          description: Needed for LIMIT orders.
+        timeInForce:
+          $ref: '#/components/schemas/TimeInForce'
+    Fill:
+      type: object
+      required: [executionId, quantity, price, executedAt]
+      properties:
+        executionId:
+          type: string
+          format: uuid
+        quantity:
+          type: integer
+          format: int64
+        price:
+          type: string
+        executedAt:
+          type: string
+          format: date-time
+    Order:
+      type: object
+      required: [id, accountId, symbol, side, type, quantity, filledQuantity, status, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        symbol:
+          type: string
+        side:
+          $ref: '#/components/schemas/Side'
+        type:
+          $ref: '#/components/schemas/OrderType'
+        quantity:
+          type: integer
+          format: int64
+        filledQuantity:
+          type: integer
+          format: int64
+        limitPrice:
+          type: string
+        timeInForce:
+          $ref: '#/components/schemas/TimeInForce'
+        status:
+          $ref: '#/components/schemas/OrderStatus'
+        fills:
+          type: array
+          items:
+            $ref: '#/components/schemas/Fill'
+        createdAt:
+          type: string
+          format: date-time
+    BookLevel:
+      type: object
+      required: [price, quantity]
+      properties:
+        price:
+          type: string
+        quantity:
+          type: integer
+          format: int64
+    Book:
+      type: object
+      required: [symbol, bids, asks, asOf]
+      properties:
+        symbol:
+          type: string
+        bids:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookLevel'
+        asks:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookLevel'
+        asOf:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        code:
+          type: string
+        traceId:
+          type: string
