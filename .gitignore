@@ -1,0 +1,25 @@
+# Build output
+target/
+*.class
+
+# Secrets. Never commit these.
+.env
+/env
+infra/.env
+*.pem
+*.key
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+
+# Editors and operating systems
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+.DS_Store

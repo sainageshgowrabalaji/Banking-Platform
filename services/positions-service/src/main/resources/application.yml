@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: positions-service
+  threads:
+    virtual:
+      enabled: true
+
+server:
+  port: 8303
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true

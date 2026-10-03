@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- Spring Boot's parent manages the versions of every Spring library and most Maven plugins. -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>4.1.1</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.sainagesh.bank</groupId>
+  <artifactId>banking-platform</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+  <name>Banking Platform</name>
+  <description>One platform for banking, payments, trading, wealth, risk and compliance.</description>
+
+  <properties>
+    <java.version>21</java.version>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    <!-- Spring Cloud 2025.1.2 (Oakwood) is the train that supports Spring Boot 4.1. -->
+    <spring-cloud.version>2025.1.2</spring-cloud.version>
+  </properties>
+
+  <modules>
+    <module>libs/common-money</module>
+    <module>libs/common-events</module>
+    <module>libs/common-web</module>
+    <module>services/api-gateway</module>
+    <module>services/ledger-service</module>
+    <module>services/payments-service</module>
+    <module>services/notification-service</module>
+    <module>services/compliance-service</module>
+    <module>services/market-data-service</module>
+    <module>services/trading-service</module>
+    <module>services/positions-service</module>
+    <module>services/post-trade-service</module>
+    <module>services/wealth-service</module>
+    <module>services/ops-agent</module>
+  </modules>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.springframework.cloud</groupId>
+        <artifactId>spring-cloud-dependencies</artifactId>
+        <version>${spring-cloud.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-money</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-events</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-web</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <build>
+    <plugins>
+      <!-- Fails early, with a clear message, when the wrong JDK is used. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce-build-environment</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <requireJavaVersion>
+                  <version>[21,)</version>
+                  <message>This project needs JDK 21 or newer. On a Mac run: brew install --cask temurin@21</message>
+                </requireJavaVersion>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+</project>
