@@ -1,0 +1,15 @@
+# A Service gives the pods one stable name and spreads requests across them.
+# This is the load balancing and service discovery that Eureka and Ribbon used to do in older Spring systems.
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Values.name }}
+  labels:
+    app.kubernetes.io/name: {{ .Values.name }}
+spec:
+  selector:
+    app.kubernetes.io/name: {{ .Values.name }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

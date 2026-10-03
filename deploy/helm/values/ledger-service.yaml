@@ -1,0 +1,6 @@
+name: ledger-service
+image:
+  repository: ghcr.io/sainageshgowrabalaji/banking-platform/ledger-service
+port: 8101
+autoscaling:
+  enabled: true

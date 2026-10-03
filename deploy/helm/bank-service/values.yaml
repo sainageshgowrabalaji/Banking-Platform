@@ -1,0 +1,20 @@
+# Defaults shared by every service. Override per service, for example
+#   helm upgrade --install ledger deploy/helm/bank-service -f deploy/helm/values/ledger-service.yaml
+name: service
+image:
+  repository: ghcr.io/sainageshgowrabalaji/banking-platform/service
+  tag: "0.1.0"
+port: 8080
+replicas: 2
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 768Mi
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+env: {}
