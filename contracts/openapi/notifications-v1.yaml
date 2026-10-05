@@ -1,0 +1,112 @@
+openapi: 3.1.0
+info:
+  title: Notifications API
+  version: 1.0.0
+  description: >-
+    The messages the bank sent to a customer. They are made from the events the other services publish
+    on Kafka. The notification service serves this contract, and its integration tests check every
+    response against this file.
+servers:
+  - url: http://localhost:8080/notifications
+    description: Through the local gateway
+tags:
+  - name: Notifications
+security:
+  - bearerAuth: []
+paths:
+  /v1/notifications:
+    get:
+      operationId: listNotifications
+      summary: List the notifications of an account, newest first
+      tags: [Notifications]
+      parameters:
+        - name: accountId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: The notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Notification'
+        '400':
+          $ref: '#/components/responses/Problem'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Problem:
+      description: An error in RFC 9457 problem details format
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    Notification:
+      type: object
+      required: [id, accountId, eventType, channel, title, body, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        eventType:
+          type: string
+          description: The type of the event that caused it.
+          examples: [bank.payments.settled]
+        channel:
+          type: string
+          enum: [IN_APP, EMAIL]
+        title:
+          type: string
+        body:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type:
+          type: string
+          format: uri
+          description: A stable address for this kind of error.
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          description: The path of the request that failed.
+        code:
+          type: string
+          description: A stable code a client can branch on.
+        fields:
+          type: object
+          description: For a body that failed validation, each bad field with what is wrong with it.
+          additionalProperties:
+            type: string
+        traceId:
+          type: string
+          description: Quote this to support. It finds the request in the traces and the logs.

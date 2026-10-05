@@ -30,6 +30,23 @@ The words of the business, in plain language. Knowing these is half of a finance
 | pacs.002 | A status report on a payment |
 | camt.053 | An end-of-day account statement |
 | Cut-off | The time after which a payment waits for the next business day |
+| Settlement account | The bank's own account that money leaving on a rail is credited to, until the network settles |
+| Return | An ACH payment sent back by the receiving bank, for example because the account is closed |
+| Status code | Where a payment is. RCVD received, ACCP accepted, ACSP in process, ACSC settled, RJCT rejected, CANC cancelled |
+| Reason code | Why a payment was rejected. AM04 not enough money, AC04 closed account, AC01 wrong account number |
+
+## Platform
+
+| Term | Meaning |
+|---|---|
+| Idempotency key | A value the client sends with a write, so a retry returns the first result and changes nothing twice |
+| Saga | A chain of local steps across services, each with an undo, used where no single transaction can cover the work |
+| Outbox | A table where a service saves its events in the same transaction as its data, for a relay to send to Kafka |
+| Dead letter topic | Where a consumer parks an event it could not handle, so the rest keep flowing |
+| Circuit breaker | A switch that stops calls to a failing service for a while, so callers fail fast |
+| Token bucket | A rate limit that refills at a steady pace and allows short bursts |
+| Trace | The path of one request through every service it touched |
+| Contract | The written API that other teams build against |
 
 ## Compliance
 

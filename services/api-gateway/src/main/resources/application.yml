@@ -1,78 +1,40 @@
 # The gateway is the only door into the platform.
-# A request to /ledger/v1/info is sent to the ledger service as /v1/info.
-# Each address can be changed with an environment variable, which is how Docker and Kubernetes point
-# the gateway at the real services.
+# A request to /ledger/v1/accounts is sent to the ledger service as /v1/accounts.
 spring:
   application:
     name: api-gateway
   threads:
     virtual:
       enabled: true
-  cloud:
-    gateway:
-      server:
-        webmvc:
-          routes:
-            - id: ledger
-              uri: ${LEDGER_URL:http://localhost:8101}
-              predicates:
-                - Path=/ledger/**
-              filters:
-                - StripPrefix=1
-            - id: payments
-              uri: ${PAYMENTS_URL:http://localhost:8102}
-              predicates:
-                - Path=/payments/**
-              filters:
-                - StripPrefix=1
-            - id: notifications
-              uri: ${NOTIFICATION_URL:http://localhost:8103}
-              predicates:
-                - Path=/notifications/**
-              filters:
-                - StripPrefix=1
-            - id: compliance
-              uri: ${COMPLIANCE_URL:http://localhost:8201}
-              predicates:
-                - Path=/compliance/**
-              filters:
-                - StripPrefix=1
-            - id: market-data
-              uri: ${MARKET_DATA_URL:http://localhost:8301}
-              predicates:
-                - Path=/market-data/**
-              filters:
-                - StripPrefix=1
-            - id: trading
-              uri: ${TRADING_URL:http://localhost:8302}
-              predicates:
-                - Path=/trading/**
-              filters:
-                - StripPrefix=1
-            - id: positions
-              uri: ${POSITIONS_URL:http://localhost:8303}
-              predicates:
-                - Path=/positions/**
-              filters:
-                - StripPrefix=1
-            - id: post-trade
-              uri: ${POST_TRADE_URL:http://localhost:8304}
-              predicates:
-                - Path=/post-trade/**
-              filters:
-                - StripPrefix=1
-            - id: wealth
-              uri: ${WEALTH_URL:http://localhost:8401}
-              predicates:
-                - Path=/wealth/**
-              filters:
-                - StripPrefix=1
-            - id: ops-agent
-              uri: ${OPS_AGENT_URL:http://localhost:8501}
-              predicates:
-                - Path=/ops-agent/**
-              filters:
-                - StripPrefix=1
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Where the signing keys of the tokens come from. The realm is created by infra/keycloak.
+          issuer-uri: ${KEYCLOAK_ISSUER:http://localhost:8090/realms/bank}
+
+bank:
+  gateway:
+    security:
+      # Set GATEWAY_SECURITY=false on a laptop with no Keycloak. Never in a real environment.
+      enabled: ${GATEWAY_SECURITY:true}
+    rate-limit:
+      capacity: 120
+      period: PT1M
+    timeout: PT10S
+    # Each address can be changed with an environment variable, which is how Docker and Kubernetes
+    # point the gateway at the real services.
+    services:
+      ledger: ${LEDGER_URL:http://localhost:8101}
+      payments: ${PAYMENTS_URL:http://localhost:8102}
+      notifications: ${NOTIFICATION_URL:http://localhost:8103}
+      compliance: ${COMPLIANCE_URL:http://localhost:8201}
+      market-data: ${MARKET_DATA_URL:http://localhost:8301}
+      trading: ${TRADING_URL:http://localhost:8302}
+      positions: ${POSITIONS_URL:http://localhost:8303}
+      post-trade: ${POST_TRADE_URL:http://localhost:8304}
+      wealth: ${WEALTH_URL:http://localhost:8401}
+      ops-agent: ${OPS_AGENT_URL:http://localhost:8501}
 
 server:
   port: 8080

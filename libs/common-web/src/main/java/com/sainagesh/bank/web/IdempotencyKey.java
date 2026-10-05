@@ -13,6 +13,15 @@ public record IdempotencyKey(String value) {
     public static final String HEADER = "Idempotency-Key";
     private static final Pattern ALLOWED = Pattern.compile("[A-Za-z0-9._:-]{8,64}");
 
+    /** Reads the header value. A missing or badly formed key is a client error with a clear message. */
+    public static IdempotencyKey fromHeader(String value) {
+        try {
+            return new IdempotencyKey(value);
+        } catch (IllegalArgumentException e) {
+            throw ApiException.badRequest("INVALID_IDEMPOTENCY_KEY", e.getMessage());
+        }
+    }
+
     public IdempotencyKey {
         if (value == null || !ALLOWED.matcher(value).matches()) {
             throw new IllegalArgumentException(

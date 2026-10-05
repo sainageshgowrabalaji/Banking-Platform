@@ -1,0 +1,2 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.sainagesh.bank.observability.ObservabilityDefaults

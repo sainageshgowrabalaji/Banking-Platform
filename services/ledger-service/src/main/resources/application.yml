@@ -4,6 +4,35 @@ spring:
   threads:
     virtual:
       enabled: true
+  datasource:
+    url: ${LEDGER_DB_URL:jdbc:postgresql://localhost:5432/ledger}
+    username: ${LEDGER_DB_USER:bank}
+    password: ${LEDGER_DB_PASSWORD:bank_local_only}
+  jpa:
+    # Flyway owns the schema. Hibernate only checks that its classes match the tables.
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        # Write updates in id order, so two transfers between the same accounts cannot deadlock.
+        order_updates: true
+  jackson:
+    default-property-inclusion: non_null
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      # Wait for every in-sync copy, and never write the same message twice on a retry.
+      acks: all
+      properties:
+        enable.idempotence: true
+        # Give up on an event after 8 seconds. The outbox relay waits 10 for each one, so by the
+        # time it tries the event again the producer has let go of the first try. With the default
+        # of two minutes, a slow broker would be sent the same event again and again.
+        delivery.timeout.ms: 8000
+        request.timeout.ms: 4000
 
 server:
   port: 8101

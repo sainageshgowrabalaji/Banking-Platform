@@ -23,3 +23,6 @@ infra/.env
 .project
 .classpath
 .DS_Store
+
+# Logs and process ids of services started by scripts/phase1.sh
+.run/

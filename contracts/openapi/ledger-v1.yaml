@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
   title: Ledger API
-  version: 1.0.0-draft
+  version: 1.0.0
   description: >-
-    Accounts and the double-entry journal. Draft contract for phase 1. The service does not serve
-    these endpoints yet.
+    Accounts, holds and the double-entry journal. The ledger service serves this contract, and its
+    integration tests check every response against this file.
 servers:
   - url: http://localhost:8080/ledger
     description: Through the local gateway
 tags:
   - name: Accounts
+  - name: Holds
   - name: Journal
 security:
   - bearerAuth: []
@@ -18,6 +19,9 @@ paths:
     post:
       operationId: openAccount
       summary: Open an account
+      description: >-
+        The account is ACTIVE at once. Sending the same request again with the same Idempotency-Key
+        returns the first account. The same key with a different body is refused with 422.
       tags: [Accounts]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -45,6 +49,8 @@ paths:
           $ref: '#/components/responses/Problem'
         '409':
           $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
   /v1/accounts/{accountId}:
     get:
       operationId: getAccount
@@ -65,7 +71,9 @@ paths:
     get:
       operationId: getBalance
       summary: Get the balances of an account
-      description: The ledger balance counts posted entries. The available balance also subtracts holds.
+      description: >-
+        The ledger balance counts posted entries. The held amount is reserved by holds. The available
+        balance is the ledger balance minus the held amount.
       tags: [Accounts]
       parameters:
         - $ref: '#/components/parameters/AccountId'
@@ -94,13 +102,160 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EntryPage'
+        '400':
+          $ref: '#/components/responses/Problem'
         '404':
+          $ref: '#/components/responses/Problem'
+  /v1/accounts/{accountId}/freeze:
+    post:
+      operationId: freezeAccount
+      summary: Freeze an account
+      description: A frozen account still receives money. It cannot send any, and no new hold can be placed on it.
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The account, now FROZEN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/accounts/{accountId}/unfreeze:
+    post:
+      operationId: unfreezeAccount
+      summary: Lift a freeze
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The account, ACTIVE again
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/accounts/{accountId}/close:
+    post:
+      operationId: closeAccount
+      summary: Close an account
+      description: Only an account with a zero balance and no holds can be closed. Closing cannot be undone.
+      tags: [Accounts]
+      parameters:
+        - $ref: '#/components/parameters/AccountId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The account, now CLOSED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Account'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+  /v1/holds:
+    post:
+      operationId: placeHold
+      summary: Reserve money on an account
+      description: >-
+        Internal. The reserved money stays in the account but cannot be spent by anything else. A
+        reference holds money once. Asking again with the same reference returns the first hold with 200
+        while it is still active, and 409 once it has been released or captured.
+      tags: [Holds]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PlaceHoldRequest'
+      responses:
+        '201':
+          description: The money was reserved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '200':
+          description: This reference already had a hold, which is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
+          $ref: '#/components/responses/Problem'
+        '422':
+          $ref: '#/components/responses/Problem'
+  /v1/holds/{holdId}:
+    get:
+      operationId: getHold
+      summary: Get one hold
+      tags: [Holds]
+      parameters:
+        - $ref: '#/components/parameters/HoldId'
+      responses:
+        '200':
+          description: The hold
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '404':
+          $ref: '#/components/responses/Problem'
+  /v1/holds/{holdId}/release:
+    post:
+      operationId: releaseHold
+      summary: Give reserved money back
+      description: Internal. Releasing a hold that is already released changes nothing and returns it.
+      tags: [Holds]
+      parameters:
+        - $ref: '#/components/parameters/HoldId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: The hold, now RELEASED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Hold'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
+        '409':
           $ref: '#/components/responses/Problem'
   /v1/journal-entries:
     post:
       operationId: postJournalEntry
       summary: Post a balanced journal entry
-      description: Internal. Called by other services, never by a customer. Debits must equal credits.
+      description: >-
+        Internal. Called by other services, never by a customer. Debits must equal credits. A reference
+        is posted once. Posting it again with the same lines returns the first entry with 200, and
+        with different lines is refused with 409. With a holdId, the hold is ended in the same
+        transaction, so the reserved money is spent by this entry and by nothing else.
       tags: [Journal]
       parameters:
         - $ref: '#/components/parameters/IdempotencyKey'
@@ -117,6 +272,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/JournalEntry'
+        '200':
+          description: This reference was already posted with the same lines. The first entry is returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalEntry'
+        '400':
+          $ref: '#/components/responses/Problem'
+        '404':
+          $ref: '#/components/responses/Problem'
         '409':
           $ref: '#/components/responses/Problem'
         '422':
@@ -138,6 +303,13 @@ components:
         pattern: '^[A-Za-z0-9._:-]{8,64}$'
     AccountId:
       name: accountId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    HoldId:
+      name: holdId
       in: path
       required: true
       schema:
@@ -183,6 +355,12 @@ components:
     AccountStatus:
       type: string
       enum: [PENDING, ACTIVE, FROZEN, CLOSED]
+    HoldStatus:
+      type: string
+      description: >-
+        ACTIVE reserves money. CAPTURED was spent by a journal entry. RELEASED gave it back, because
+        someone asked or because the hold ran out of time.
+      enum: [ACTIVE, CAPTURED, RELEASED]
     OpenAccountRequest:
       type: object
       required: [customerId, type, currency]
@@ -191,13 +369,20 @@ components:
           type: string
           format: uuid
         type:
-          $ref: '#/components/schemas/AccountType'
+          type: string
+          enum: [CHECKING, SAVINGS]
+          description: >-
+            Only customer accounts are opened here. The bank's own INTERNAL accounts have no overdraft
+            limit, so they are created by a database migration and never through the API.
         currency:
           type: string
           pattern: '^[A-Z]{3}$'
+        name:
+          type: string
+          maxLength: 140
     Account:
       type: object
-      required: [id, customerId, type, currency, status, openedAt]
+      required: [id, type, currency, status, openedAt]
       properties:
         id:
           type: string
@@ -207,6 +392,8 @@ components:
           format: uuid
         type:
           $ref: '#/components/schemas/AccountType'
+        name:
+          type: string
         currency:
           type: string
         status:
@@ -214,9 +401,12 @@ components:
         openedAt:
           type: string
           format: date-time
+        closedAt:
+          type: string
+          format: date-time
     Balance:
       type: object
-      required: [accountId, ledger, available, asOf]
+      required: [accountId, ledger, available, held, asOf]
       properties:
         accountId:
           type: string
@@ -225,7 +415,52 @@ components:
           $ref: '#/components/schemas/Money'
         available:
           $ref: '#/components/schemas/Money'
+        held:
+          $ref: '#/components/schemas/Money'
         asOf:
+          type: string
+          format: date-time
+    PlaceHoldRequest:
+      type: object
+      required: [accountId, amount, reference]
+      properties:
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        reference:
+          type: string
+          maxLength: 140
+          description: The business reason, such as a payment id. One reference holds money at most once.
+        expiresInSeconds:
+          type: integer
+          minimum: 1
+          maximum: 2592000
+          description: After this long a hold nobody used is given back. Seven days when left out.
+    Hold:
+      type: object
+      required: [id, accountId, amount, reference, status, createdAt, expiresAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+        accountId:
+          type: string
+          format: uuid
+        amount:
+          $ref: '#/components/schemas/Money'
+        reference:
+          type: string
+        status:
+          $ref: '#/components/schemas/HoldStatus'
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        closedAt:
           type: string
           format: date-time
     Posting:
@@ -246,12 +481,18 @@ components:
       properties:
         reference:
           type: string
+          maxLength: 140
           description: The business reason, such as a payment id. One reference is posted at most once.
         postings:
           type: array
           minItems: 2
+          maxItems: 200
           items:
             $ref: '#/components/schemas/Posting'
+        holdId:
+          type: string
+          format: uuid
+          description: A hold on one of the accounts in this entry, to end in the same transaction.
     JournalEntry:
       type: object
       required: [id, reference, postedAt, postings]
@@ -286,14 +527,25 @@ components:
         type:
           type: string
           format: uri
+          description: A stable address for this kind of error.
         title:
           type: string
         status:
           type: integer
         detail:
           type: string
+        instance:
+          type: string
+          description: The path of the request that failed.
         code:
           type: string
+          description: A stable code a client can branch on.
           examples: [INSUFFICIENT_FUNDS]
+        fields:
+          type: object
+          description: For a body that failed validation, each bad field with what is wrong with it.
+          additionalProperties:
+            type: string
         traceId:
           type: string
+          description: Quote this to support. It finds the request in the traces and the logs.

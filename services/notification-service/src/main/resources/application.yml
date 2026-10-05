@@ -4,6 +4,34 @@ spring:
   threads:
     virtual:
       enabled: true
+  datasource:
+    url: ${NOTIFICATION_DB_URL:jdbc:postgresql://localhost:5432/notification}
+    username: ${NOTIFICATION_DB_USER:bank}
+    password: ${NOTIFICATION_DB_PASSWORD:bank_local_only}
+  jackson:
+    default-property-inclusion: non_null
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Every copy of this service joins the same group, so each event is handled by one of them.
+      group-id: notification-service
+      # A new group starts from the oldest event, so nothing published before it started is missed.
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      # Each event carries the trace id of the request that caused it. With this on, the work done
+      # here joins that same trace, so one payment shows as one picture from gateway to notification.
+      observation-enabled: true
+    producer:
+      # Only used to park failed events on a dead letter topic.
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+bank:
+  outbox:
+    # This service publishes no events of its own, so it has no outbox to relay.
+    relay-enabled: false
 
 server:
   port: 8103

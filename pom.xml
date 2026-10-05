@@ -23,12 +23,21 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <!-- Spring Cloud 2025.1.2 (Oakwood) is the train that supports Spring Boot 4.1. -->
     <spring-cloud.version>2025.1.2</spring-cloud.version>
+    <!-- Libraries Spring Boot does not manage. -->
+    <archunit.version>1.5.1</archunit.version>
+    <bucket4j.version>8.15.0</bucket4j.version>
+    <!-- Checks a request and its response against an OpenAPI file. Used by the contract checks in tests. -->
+    <openapi-validator.version>3.0.0</openapi-validator.version>
   </properties>
 
   <modules>
     <module>libs/common-money</module>
     <module>libs/common-events</module>
     <module>libs/common-web</module>
+    <module>libs/common-messaging</module>
+    <module>libs/common-idempotency</module>
+    <module>libs/common-observability</module>
+    <module>libs/common-testing</module>
     <module>services/api-gateway</module>
     <module>services/ledger-service</module>
     <module>services/payments-service</module>
@@ -66,11 +75,65 @@
         <artifactId>common-web</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-messaging</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-idempotency</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-observability</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.sainagesh.bank</groupId>
+        <artifactId>common-testing</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.tngtech.archunit</groupId>
+        <artifactId>archunit</artifactId>
+        <version>${archunit.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.atlassian.oai</groupId>
+        <artifactId>openapi-request-validator-core</artifactId>
+        <version>${openapi-validator.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j_jdk17-core</artifactId>
+        <version>${bucket4j.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.bucket4j</groupId>
+        <artifactId>bucket4j_jdk17-caffeine</artifactId>
+        <version>${bucket4j.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
   <build>
     <plugins>
+      <!-- Runs the integration tests, the classes named *IT, after the unit tests. They need
+           PostgreSQL and Kafka, which come from Docker. With no Docker they are skipped. -->
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
       <!-- Fails early, with a clear message, when the wrong JDK is used. -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

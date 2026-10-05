@@ -1,0 +1,52 @@
+{
+  "realm": "bank",
+  "displayName": "Bank (local)",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "accessTokenLifespan": 900,
+  "roles": {
+    "realm": [
+      { "name": "bank-customer", "description": "A customer. Can open accounts and send payments." },
+      { "name": "bank-operator", "description": "Bank staff. Can also post journal entries, place holds and freeze accounts." }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "bank-cli",
+      "name": "Command line and scripts",
+      "description": "A public client that swaps a user name and password for a token. For a laptop only. A real front end uses the authorization code flow with PKCE.",
+      "enabled": true,
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "serviceAccountsEnabled": false,
+      "protocol": "openid-connect",
+      "redirectUris": [],
+      "webOrigins": []
+    }
+  ],
+  "users": [
+    {
+      "username": "alice",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Alice",
+      "lastName": "Customer",
+      "email": "alice@bank.example",
+      "credentials": [ { "type": "password", "value": "alice_local_only", "temporary": false } ],
+      "realmRoles": [ "bank-customer" ]
+    },
+    {
+      "username": "olivia",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Olivia",
+      "lastName": "Operator",
+      "email": "olivia@bank.example",
+      "credentials": [ { "type": "password", "value": "olivia_local_only", "temporary": false } ],
+      "realmRoles": [ "bank-customer", "bank-operator" ]
+    }
+  ]
+}

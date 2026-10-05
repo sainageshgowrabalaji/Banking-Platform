@@ -45,21 +45,24 @@ services:
     volumes:
       - kafka-data:/var/lib/kafka/data
 
-  # Rate limits at the gateway, idempotency keys and short-lived caches.
+  # Not used by phase 1. It is here for the phase that shares rate limits between gateway copies.
   redis:
     image: redis:7
     ports:
       - "6379:6379"
 
   # Login, tokens, roles. Admin console on http://localhost:8090
+  # On first start it loads the "bank" realm from infra/keycloak, with two users for a laptop.
   keycloak:
     image: quay.io/keycloak/keycloak:26.3
-    command: start-dev
+    command: start-dev --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin_local_only}
     ports:
       - "8090:8080"
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
 
   # Grafana with Tempo (traces), Loki (logs) and Prometheus (metrics) in one container.
   # Grafana on http://localhost:3000. Services send OpenTelemetry data to port 4318.

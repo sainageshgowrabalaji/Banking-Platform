@@ -1,11 +1,14 @@
 asyncapi: 3.0.0
 info:
   title: Platform events
-  version: 1.0.0-draft
+  version: 1.0.0
   description: >-
     The Kafka topics the services share. Every message is wrapped in the same envelope, and the Kafka
-    key is the envelope subject, so all events for one account, payment or order stay in order. Draft
-    for phases 1 and 2. Nothing publishes these yet.
+    key is the envelope subject, so all events for one account, payment or order stay in order. The
+    bank topics are live. A service writes each event to its outbox table in the same transaction as
+    the business change, and a relay sends it to Kafka, so an event is never lost and never sent for a
+    change that was rolled back. Delivery is at least once, so consumers skip ids they have seen. The
+    markets topic is a draft for phase 2.
 defaultContentType: application/json
 servers:
   local:
@@ -13,6 +16,11 @@ servers:
     protocol: kafka
     description: The broker from infra/docker-compose.yml
 channels:
+  accounts:
+    address: bank.accounts.v1
+    messages:
+      accountOpened:
+        $ref: '#/components/messages/AccountOpened'
   ledger:
     address: bank.ledger.v1
     messages:
@@ -27,12 +35,32 @@ channels:
         $ref: '#/components/messages/PaymentSettled'
       paymentRejected:
         $ref: '#/components/messages/PaymentRejected'
+      paymentCancelled:
+        $ref: '#/components/messages/PaymentCancelled'
+  paymentsDeadLetter:
+    address: bank.payments.v1.dlt
+    description: >-
+      Where the notification service parks a payment event it could not handle after its retries. The
+      main topic keeps flowing, and a person can look at what is here.
+    messages:
+      paymentAccepted:
+        $ref: '#/components/messages/PaymentAccepted'
   executions:
     address: markets.executions.v1
     messages:
       orderFilled:
         $ref: '#/components/messages/OrderFilled'
 operations:
+  publishAccountEvents:
+    action: send
+    channel:
+      $ref: '#/channels/accounts'
+    summary: The ledger service publishes through its outbox table.
+  notifyOnAccountEvents:
+    action: receive
+    channel:
+      $ref: '#/channels/accounts'
+    summary: The notification service welcomes the customer.
   publishLedgerEvents:
     action: send
     channel:
@@ -55,8 +83,37 @@ operations:
     summary: The trading service publishes every fill. Positions and post-trade consume them.
 components:
   messages:
+    AccountOpened:
+      name: bank.accounts.opened
+      headers:
+        $ref: '#/components/schemas/Headers'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                type: object
+                required: [accountId, type, currency, status]
+                properties:
+                  accountId:
+                    type: string
+                    format: uuid
+                  customerId:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+                    enum: [CHECKING, SAVINGS, INTERNAL]
+                  currency:
+                    type: string
+                  status:
+                    type: string
+                    enum: [PENDING, ACTIVE, FROZEN, CLOSED]
     JournalEntryPosted:
       name: bank.ledger.entry-posted
+      headers:
+        $ref: '#/components/schemas/Headers'
       payload:
         allOf:
           - $ref: '#/components/schemas/Envelope'
@@ -86,6 +143,8 @@ components:
                           $ref: '#/components/schemas/Money'
     PaymentAccepted:
       name: bank.payments.accepted
+      headers:
+        $ref: '#/components/schemas/Headers'
       payload:
         allOf:
           - $ref: '#/components/schemas/Envelope'
@@ -95,6 +154,8 @@ components:
                 $ref: '#/components/schemas/PaymentData'
     PaymentSettled:
       name: bank.payments.settled
+      headers:
+        $ref: '#/components/schemas/Headers'
       payload:
         allOf:
           - $ref: '#/components/schemas/Envelope'
@@ -104,6 +165,19 @@ components:
                 $ref: '#/components/schemas/PaymentData'
     PaymentRejected:
       name: bank.payments.rejected
+      headers:
+        $ref: '#/components/schemas/Headers'
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              data:
+                $ref: '#/components/schemas/PaymentData'
+    PaymentCancelled:
+      name: bank.payments.cancelled
+      headers:
+        $ref: '#/components/schemas/Headers'
       payload:
         allOf:
           - $ref: '#/components/schemas/Envelope'
@@ -142,6 +216,15 @@ components:
                   price:
                     type: string
   schemas:
+    Headers:
+      type: object
+      description: Kafka record headers.
+      properties:
+        traceparent:
+          type: string
+          description: >-
+            W3C trace context of the request that caused the event. A consumer that reads it joins the
+            same trace, so one payment shows as one picture from the gateway to the notification.
     Envelope:
       type: object
       description: The same fields as EventEnvelope in libs/common-events.
@@ -192,3 +275,7 @@ components:
           enum: [RCVD, ACCP, ACSP, ACSC, RJCT, CANC]
         reasonCode:
           type: string
+          description: ISO 20022 reason, present when the status is RJCT or CANC.
+        creditorName:
+          type: string
+          description: Who the money was going to, so a message to the customer can say so.

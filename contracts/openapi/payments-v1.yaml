@@ -1,11 +1,11 @@
 openapi: 3.1.0
 info:
   title: Payments API
-  version: 1.0.0-draft
+  version: 1.0.0
   description: >-
     Send, track and cancel payments. The fields map to ISO 20022 (pain.001 for the request, pacs.008
-    between banks, pacs.002 for status). Draft contract for phase 1. The service does not serve these
-    endpoints yet.
+    between banks, pacs.002 for status). The payments service serves this contract, and its
+    integration tests check every response against this file.
 servers:
   - url: http://localhost:8080/payments
     description: Through the local gateway
@@ -30,9 +30,23 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/CreatePaymentRequest'
+          application/xml:
+            schema:
+              type: string
+              description: >-
+                An ISO 20022 pain.001.001.09 message with one payment in it. DbtrAcct/Id/Othr/Id is the
+                debtor account id, and PmtTpInf/LclInstrm/Prtry is the rail (ACH when left out).
       responses:
         '202':
-          description: The payment was accepted for processing
+          description: >-
+            The payment was accepted for processing. The status in the body says how far it has come,
+            which can already be ACSC or RJCT. Sending the same request again with the same
+            Idempotency-Key returns the same payment.
+          headers:
+            Location:
+              description: URL of the payment
+              schema:
+                type: string
           content:
             application/json:
               schema:
@@ -40,6 +54,8 @@ paths:
         '400':
           $ref: '#/components/responses/Problem'
         '409':
+          $ref: '#/components/responses/Problem'
+        '415':
           $ref: '#/components/responses/Problem'
         '422':
           $ref: '#/components/responses/Problem'
@@ -76,6 +92,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/PaymentPage'
+        '400':
+          $ref: '#/components/responses/Problem'
   /v1/payments/{paymentId}:
     get:
       operationId: getPayment
@@ -107,9 +125,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Payment'
+        '400':
+          $ref: '#/components/responses/Problem'
         '404':
           $ref: '#/components/responses/Problem'
         '409':
+          $ref: '#/components/responses/Problem'
+  /v1/payments/{paymentId}/messages:
+    get:
+      operationId: listPaymentMessages
+      summary: The ISO 20022 messages exchanged with the rail for a payment, oldest first
+      tags: [Payments]
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+      responses:
+        '200':
+          description: The messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/PaymentMessage'
+        '404':
           $ref: '#/components/responses/Problem'
 components:
   securitySchemes:
@@ -169,9 +207,12 @@ components:
           maxLength: 140
         accountNumber:
           type: string
+          maxLength: 64
+          description: For BOOK, the id of the receiving account in this bank.
         routingNumber:
           type: string
-          description: Needed for ACH and INSTANT.
+          pattern: '^[0-9]{9}$'
+          description: The receiving bank. Needed for ACH and INSTANT.
     CreatePaymentRequest:
       type: object
       required: [debtorAccountId, creditor, amount, rail]
@@ -212,13 +253,42 @@ components:
           $ref: '#/components/schemas/PaymentStatus'
         reasonCode:
           type: string
-          description: ISO 20022 reason when the status is RJCT, such as AM04 for insufficient funds.
+          description: >-
+            ISO 20022 reason when the status is RJCT or CANC. AC01 wrong account number, AC04 closed
+            account, AC06 blocked account, AM02 over the rail's limit, AM04 not enough money, CUST
+            cancelled by the customer, MS03 no reason given, RR04 stopped by a regulatory check.
+          enum: [AC01, AC04, AC06, AM02, AM04, CUST, MS03, RR04]
+        reasonDetail:
+          type: string
         endToEndId:
           type: string
+        remittanceInformation:
+          type: string
+        settlementDate:
+          type: string
+          format: date
+          description: The business day an ACH payment settles on.
         createdAt:
           type: string
           format: date-time
         settledAt:
+          type: string
+          format: date-time
+    PaymentMessage:
+      type: object
+      required: [direction, type, body, at]
+      properties:
+        direction:
+          type: string
+          enum: [IN, OUT]
+        type:
+          type: string
+          description: The ISO 20022 message name and version.
+          examples: [pacs.008.001.08]
+        body:
+          type: string
+          description: The message itself, as XML.
+        at:
           type: string
           format: date-time
     PaymentPage:
@@ -238,13 +308,24 @@ components:
         type:
           type: string
           format: uri
+          description: A stable address for this kind of error.
         title:
           type: string
         status:
           type: integer
         detail:
           type: string
+        instance:
+          type: string
+          description: The path of the request that failed.
         code:
           type: string
+          description: A stable code a client can branch on.
+        fields:
+          type: object
+          description: For a body that failed validation, each bad field with what is wrong with it.
+          additionalProperties:
+            type: string
         traceId:
           type: string
+          description: Quote this to support. It finds the request in the traces and the logs.

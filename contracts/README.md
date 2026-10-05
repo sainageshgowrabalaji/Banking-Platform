@@ -9,8 +9,24 @@ the contract, and the code is tested against it.
 | `asyncapi/` | AsyncAPI 3.0 | Kafka topics and the events on them |
 | `proto/` | Protocol Buffers | gRPC streams between services, used where speed matters |
 
-Every file here is a draft for the phase named in its description. The services do not serve these
-endpoints yet.
+## What is live
+
+| File | State |
+|---|---|
+| `openapi/ledger-v1.yaml` | Served by the ledger service |
+| `openapi/payments-v1.yaml` | Served by the payments service |
+| `openapi/notifications-v1.yaml` | Served by the notification service |
+| `asyncapi/events-v1.yaml` | The `bank.*` topics are live. The `markets.*` topic is a draft |
+| `openapi/trading-v1.yaml`, `proto/` | Drafts for phase 2 |
+
+## How the code is held to the contract
+
+Every response the integration tests receive is compared with the OpenAPI file, by `Contract` in
+`libs/common-testing`. The check is strict. A field the file does not list, a status code nobody
+wrote down or a path missing from the file fails the build. So a change to an API starts here, in
+the contract, and the code follows.
+
+CI also checks that each OpenAPI file is valid on its own.
 
 ## Rules every API follows
 

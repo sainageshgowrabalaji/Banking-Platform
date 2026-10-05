@@ -243,13 +243,24 @@ components:
         type:
           type: string
           format: uri
+          description: A stable address for this kind of error.
         title:
           type: string
         status:
           type: integer
         detail:
           type: string
+        instance:
+          type: string
+          description: The path of the request that failed.
         code:
           type: string
+          description: A stable code a client can branch on.
+        fields:
+          type: object
+          description: For a body that failed validation, each bad field with what is wrong with it.
+          additionalProperties:
+            type: string
         traceId:
           type: string
+          description: Quote this to support. It finds the request in the traces and the logs.
